@@ -31,7 +31,10 @@ laser = pygame.image.load("Images/laser.png").convert_alpha()
 laser_rect = laser.get_rect(midbottom = player_rect.midtop)
 boss_laser_rect = laser.get_rect(midtop = boss_rect.midtop)
 
-font_obj = pygame.font.Font("font/Pixeltype.ttf", 50)
+try:
+    font_obj = pygame.font.Font("font/Pixeltype.ttf", 50)
+except FileNotFoundError:
+    font_obj = pygame.font.Font(None, 50)
 game_over_font = font_obj.render("GAME OVER", False, "Black")
 game_over_font_rect = game_over_font.get_rect(midbottom=(600,400))
 kills = 0
@@ -74,8 +77,9 @@ def AsteroidSpawn():
                 del obstacle_list[count]
                 pygame.time.set_timer(explosion_timer, 50)
                 kills = kills + 1
-                if kills>3:
+                if kills % 10 == 0:
                     boss_state = True
+                    boss_rect.midbottom = (600, 400)
                 break
             if player_rect.colliderect(obstacle_list[count]):
                 game_state =  False
@@ -89,25 +93,54 @@ def Score():
     screen.blit(score_font,score_font_rect)
 explosion_state = False
 
-boss_horizontal = 10
+boss_horizontal = 16
 boss_state = False
 boss_laser_state = False
+boss_hp_max = 15
+boss_hp = boss_hp_max
+boss_hurt_frames = 0
+boss_laser_speed = 18
 def Boss():
     global kills, boss_horizontal, boss_timer, boss_rect, boss_laser_state
+    global boss_hp, boss_state, boss_hurt_frames, truth, laser_rect, game_state, x, y
     # spawn the boss, spawn the health bar have it move around randomly, have it shoot lasers randomly,
     # have it turn red when damage, reduce hp when damaged
-    screen.blit(boss_surf,boss_rect)
     boss_rect.left = boss_rect.left + boss_horizontal
     if boss_rect.right >= 1200:
         boss_horizontal = boss_horizontal * -1
     elif boss_rect.left <= 0:
         boss_horizontal = boss_horizontal * -1
-    if laser_rect.collidepoint(boss_rect.midbottom):
-        screen.blit(boss_surf_hurt,boss_rect)
+
+    if truth and laser_rect.colliderect(boss_rect):
+        boss_hp = boss_hp - 1
+        boss_hurt_frames = 8
+        truth = False
+        laser_rect.bottom = -300
+        if boss_hp <= 0:
+            boss_state = False
+            boss_laser_state = False
+            x, y = boss_rect.left, boss_rect.top
+            pygame.time.set_timer(explosion_timer, 50)
+            boss_rect.midbottom = (600, 400)
+            boss_hp = boss_hp_max
+            return
+
+    if boss_hurt_frames > 0:
+        screen.blit(boss_surf_hurt, boss_rect)
+        boss_hurt_frames = boss_hurt_frames - 1
+    else:
+        screen.blit(boss_surf, boss_rect)
+
     if boss_laser_state:
-        boss_laser_state = False
         screen.blit(laser, boss_laser_rect)
-#        if boss_laser_rect.bottom >
+        boss_laser_rect.top = boss_laser_rect.top + boss_laser_speed
+        if player_rect.colliderect(boss_laser_rect):
+            game_state = False
+        if boss_laser_rect.top > 800:
+            boss_laser_state = False
+
+    hp_width = int(health_bar_surf.get_width() * boss_hp / boss_hp_max)
+    screen.blit(health_bar_surf, health_bar_surf_rect, (0, 0, hp_width, health_bar_surf.get_height()))
 
 
 while True:
@@ -126,15 +159,21 @@ while True:
                 if laser_rect.top < -200:
                     laser_rect.midbottom = player_rect.midtop
         if event.type == obstacle_event:
-            obstacle_list.append(asteroid_small.get_rect(midbottom=(random.randrange(0,1200),0)))
+            if boss_state == False:
+                obstacle_list.append(asteroid_small.get_rect(midbottom=(random.randrange(0,1200),0)))
         if event.type == explosion_timer:
             explosion_state= True
         if event.type == boss_timer:
             random_direction = random.randrange(0, 2)
             if random_direction == 1:
-                boss_horizontal = 10
+                boss_horizontal = 16
             else:
-                boss_horizontal = -10
+                boss_horizontal = -16
+        if event.type == boss_laser and boss_state:
+            if boss_laser_state == False:
+                boss_laser_state = True
+                boss_laser_rect.midtop = boss_rect.midbottom
+            pygame.time.set_timer(boss_laser, random.randrange(400, 1600))
 
 
 
@@ -163,7 +202,6 @@ while True:
         screen.blit(kills_font,kills_font_rect)
 
         if boss_state:
-            screen.blit(health_bar_surf, health_bar_surf_rect)
             Boss()
         if explosion_state:
             explosion = pygame.image.load("Images/explosion" + str(i + 1) + ".png")
@@ -188,6 +226,12 @@ while True:
             game_state = True
             obstacle_list.clear()
             player_rect.midbottom=(600,800)
+            boss_state = False
+            boss_hp = boss_hp_max
+            boss_rect.midbottom = (600, 400)
+            boss_laser_state = False
+            truth = False
+            laser_rect.bottom = -300
 
     clock.tick(60)
     pygame.display.update()
