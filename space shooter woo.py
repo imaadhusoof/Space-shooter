@@ -28,7 +28,6 @@ asteroid_small = pygame.image.load("Images/asteroid_cracked_1.png").convert_alph
 asteroid_small_rect = asteroid_small.get_rect(midbottom=(200,200))
 
 laser = pygame.image.load("Images/laser.png").convert_alpha()
-laser_rect = laser.get_rect(midbottom = player_rect.midtop)
 boss_laser_rect = laser.get_rect(midtop = boss_rect.midtop)
 
 try:
@@ -46,7 +45,12 @@ pygame.time.set_timer(obstacle_event, 1000)
 
 explosion_timer = pygame.USEREVENT + 2
 delta_horizontal = 0
-truth = False
+
+# ---- Player laser list (replaces the old single laser_rect / truth flag) ----
+player_lasers = []
+laser_speed = 60
+laser_cooldown = 150          # ms between shots, lower = faster spam
+last_laser_time = 0
 
 boss_timer = pygame.USEREVENT + 3
 pygame.time.set_timer(boss_timer,1000)
@@ -63,24 +67,52 @@ def Movement():
         delta_horizontal = delta_horizontal * -1
 
 
+def FireLaser():
+    """Spawns a new laser at the player's position and adds it to the list."""
+    global player_lasers, last_laser_time
+    now = pygame.time.get_ticks()
+    if now - last_laser_time >= laser_cooldown:
+        new_laser = laser.get_rect(midbottom = player_rect.midtop)
+        player_lasers.append(new_laser)
+        last_laser_time = now
+
+
+def MoveAndDrawPlayerLasers():
+    """Moves every laser in the list up the screen, draws it, and removes it once off-screen."""
+    global player_lasers
+    for player_laser in player_lasers:
+        player_laser.top -= laser_speed
+        screen.blit(laser, player_laser)
+    player_lasers = [pl for pl in player_lasers if pl.bottom > -50]
+
+
 obstacle_list=[]
 game_state = True
 
 def AsteroidSpawn():
-    global obstacle_list, laser_rect, transparency, counter, game_state, kills, kills_font, explosion_timer, x,y, boss_state
+    global obstacle_list, player_lasers, game_state, kills, kills_font, explosion_timer, x, y, boss_state
     if obstacle_list:
-        for count in range (len(obstacle_list)):
+        for count in range(len(obstacle_list) - 1, -1, -1):
             obstacle_list[count].bottom = obstacle_list[count].bottom + 6
             screen.blit(asteroid_small,obstacle_list[count])
-            if laser_rect.collidepoint(obstacle_list[count].midbottom):
+
+            hit_laser = None
+            for player_laser in player_lasers:
+                if player_laser.colliderect(obstacle_list[count]):
+                    hit_laser = player_laser
+                    break
+
+            if hit_laser is not None:
                 x, y ,w ,w2 = obstacle_list[count]
                 del obstacle_list[count]
+                player_lasers.remove(hit_laser)
                 pygame.time.set_timer(explosion_timer, 50)
                 kills = kills + 1
                 if kills % 10 == 0:
                     boss_state = True
                     boss_rect.midbottom = (600, 400)
-                break
+                continue
+
             if player_rect.colliderect(obstacle_list[count]):
                 game_state =  False
 game_reset_time = 0
@@ -102,7 +134,7 @@ boss_hurt_frames = 0
 boss_laser_speed = 18
 def Boss():
     global kills, boss_horizontal, boss_timer, boss_rect, boss_laser_state
-    global boss_hp, boss_state, boss_hurt_frames, truth, laser_rect, game_state, x, y
+    global boss_hp, boss_state, boss_hurt_frames, player_lasers, game_state, x, y
     # spawn the boss, spawn the health bar have it move around randomly, have it shoot lasers randomly,
     # have it turn red when damage, reduce hp when damaged
     boss_rect.left = boss_rect.left + boss_horizontal
@@ -111,11 +143,16 @@ def Boss():
     elif boss_rect.left <= 0:
         boss_horizontal = boss_horizontal * -1
 
-    if truth and laser_rect.colliderect(boss_rect):
+    hit_laser = None
+    for player_laser in player_lasers:
+        if player_laser.colliderect(boss_rect):
+            hit_laser = player_laser
+            break
+
+    if hit_laser is not None:
         boss_hp = boss_hp - 1
         boss_hurt_frames = 8
-        truth = False
-        laser_rect.bottom = -300
+        player_lasers.remove(hit_laser)
         if boss_hp <= 0:
             boss_state = False
             boss_laser_state = False
@@ -154,10 +191,6 @@ while True:
                 delta_horizontal = 15
             if event.key ==pygame.K_LEFT:
                 delta_horizontal = -15
-            if event.key ==pygame.K_SPACE:
-                truth = True
-                if laser_rect.top < -200:
-                    laser_rect.midbottom = player_rect.midtop
         if event.type == obstacle_event:
             if boss_state == False:
                 obstacle_list.append(asteroid_small.get_rect(midbottom=(random.randrange(0,1200),0)))
@@ -190,11 +223,12 @@ while True:
         screen.blit(player_surf,player_rect)
         #screen.blit(asteroid_surf,asteroid_rect)
 
-        if truth:
-            screen.blit(laser, laser_rect)
-            laser_rect.top = laser_rect.top - 60
-            if laser_rect.top <-200:
-                truth = False
+        # Holding space fires continuously, gated by laser_cooldown so it doesn't spam every single frame
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_SPACE]:
+            FireLaser()
+
+        MoveAndDrawPlayerLasers()
 
         if boss_state == False: AsteroidSpawn()
         kills_font = font_obj.render(f"kills:{kills}", False, "White")
@@ -230,8 +264,7 @@ while True:
             boss_hp = boss_hp_max
             boss_rect.midbottom = (600, 400)
             boss_laser_state = False
-            truth = False
-            laser_rect.bottom = -300
+            player_lasers.clear()
 
     clock.tick(60)
     pygame.display.update()
