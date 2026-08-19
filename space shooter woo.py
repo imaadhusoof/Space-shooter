@@ -192,7 +192,7 @@ while True:
 
         if truth:
             screen.blit(laser, laser_rect)
-            laser_rect.top = laser_rect.top - 30
+            laser_rect.top = laser_rect.top - 40
             if laser_rect.top <-200:
                 truth = False
 
