@@ -41,8 +41,8 @@ kills = 0
 kills_font = font_obj.render(f"kills:{kills}", False, "White")
 kills_font_rect = kills_font.get_rect(midbottom=(100,300))
 
-obstacle_event = pygame     .USEREVENT + 1
-pygame.time.set_timer(obstacle_event, 500)
+obstacle_event = pygame.USEREVENT + 1
+pygame.time.set_timer(obstacle_event, 1000)
 
 explosion_timer = pygame.USEREVENT + 2
 delta_horizontal = 0
@@ -192,7 +192,7 @@ while True:
 
         if truth:
             screen.blit(laser, laser_rect)
-            laser_rect.top = laser_rect.top - 40
+            laser_rect.top = laser_rect.top - 60
             if laser_rect.top <-200:
                 truth = False
 
